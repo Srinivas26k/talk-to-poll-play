@@ -9,6 +9,7 @@ interface SpeechRecognition extends EventTarget {
   onresult: (event: SpeechRecognitionEvent) => void;
   onerror: (event: SpeechRecognitionErrorEvent) => void;
   onend: () => void;
+  onstart: () => void;
 }
 
 interface SpeechRecognitionEvent {
@@ -49,22 +50,32 @@ export class SpeechRecognitionService {
   }
 
   private initializeRecognition() {
-    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
-      // Use the browser implementation
-      const SpeechRecognitionImpl = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      this.recognition = new SpeechRecognitionImpl();
-      
-      // Configure recognition
-      this.recognition.continuous = true;
-      this.recognition.interimResults = true;
-      this.recognition.lang = 'en-US';
+    // Check if we're in a browser environment
+    if (typeof window !== 'undefined') {
+      try {
+        // Use the browser implementation
+        const SpeechRecognitionImpl = (window as any).SpeechRecognition || 
+                                     (window as any).webkitSpeechRecognition;
+        
+        if (SpeechRecognitionImpl) {
+          this.recognition = new SpeechRecognitionImpl();
+          
+          // Configure recognition
+          this.recognition.continuous = true;
+          this.recognition.interimResults = true;
+          this.recognition.lang = 'en-US';
 
-      // Set up callbacks
-      this.recognition.onresult = this.handleRecognitionResult.bind(this);
-      this.recognition.onerror = this.handleRecognitionError.bind(this);
-      this.recognition.onend = this.handleRecognitionEnd.bind(this);
-    } else {
-      console.error('Speech recognition not supported in this browser');
+          // Set up callbacks
+          this.recognition.onresult = this.handleRecognitionResult.bind(this);
+          this.recognition.onerror = this.handleRecognitionError.bind(this);
+          this.recognition.onend = this.handleRecognitionEnd.bind(this);
+          this.recognition.onstart = () => {
+            this.isListening = true;
+          };
+        }
+      } catch (error) {
+        console.error('Failed to initialize speech recognition:', error);
+      }
     }
   }
 
@@ -85,6 +96,7 @@ export class SpeechRecognitionService {
     // If we have final text, send it to the callback
     if (this.finalTranscript && this.onTranscriptCallback) {
       this.onTranscriptCallback(this.finalTranscript);
+      this.finalTranscript = '';
     }
   }
 
@@ -94,14 +106,23 @@ export class SpeechRecognitionService {
     // Try to restart recognition on some errors
     if (event.error !== 'no-speech' && this.isListening) {
       this.stop();
-      this.start();
+      setTimeout(() => {
+        if (this.isListening) {
+          this.start();
+        }
+      }, 1000);
     }
   }
 
   private handleRecognitionEnd() {
     // Auto restart if we're supposed to be listening
     if (this.isListening && this.recognition) {
-      this.recognition.start();
+      try {
+        this.recognition.start();
+      } catch (error) {
+        console.error('Error restarting speech recognition:', error);
+        this.isListening = false;
+      }
     }
   }
 
@@ -117,6 +138,7 @@ export class SpeechRecognitionService {
       return true;
     } catch (error) {
       console.error('Error starting speech recognition:', error);
+      this.isListening = false;
       return false;
     }
   }
@@ -139,7 +161,12 @@ export class SpeechRecognitionService {
   }
 
   public isSupported(): boolean {
-    return !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition;
+    return !!(typeof window !== 'undefined' && 
+      ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition));
+  }
+
+  public getInterimTranscript(): string {
+    return this.interimTranscript;
   }
 }
 

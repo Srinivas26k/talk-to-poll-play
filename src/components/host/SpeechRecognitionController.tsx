@@ -1,56 +1,59 @@
 
 import React, { useEffect, useState } from 'react';
-import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/components/ui/sonner';
 import { Mic, MicOff, Volume } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
+import speechRecognition from '@/utils/speechRecognition';
 
 const SpeechRecognitionController: React.FC = () => {
   const { addTranscriptEntry } = useAppContext();
-  const [lastProcessedIndex, setLastProcessedIndex] = useState<number>(0);
+  const [listening, setListening] = useState<boolean>(false);
+  const [interimTranscript, setInterimTranscript] = useState<string>('');
+  const [supported, setSupported] = useState<boolean>(true);
   
-  const {
-    transcript,
-    listening,
-    resetTranscript,
-    browserSupportsSpeechRecognition,
-    interimTranscript,
-    finalTranscript
-  } = useSpeechRecognition();
-
-  // Process new transcript segments
+  // Initialize speech recognition
   useEffect(() => {
-    if (finalTranscript && finalTranscript.trim() !== '') {
+    // Check if speech recognition is supported
+    const isSupported = speechRecognition.isSupported();
+    setSupported(isSupported);
+    
+    // Set up transcript handler
+    speechRecognition.onTranscript((text) => {
       addTranscriptEntry({
         id: `transcript-${Date.now()}`,
-        text: finalTranscript,
+        text: text,
         timestamp: new Date()
       });
-      resetTranscript();
-    }
-  }, [finalTranscript, addTranscriptEntry, resetTranscript]);
+    });
+    
+    return () => {
+      // Cleanup
+      if (listening) {
+        speechRecognition.stop();
+      }
+    };
+  }, [addTranscriptEntry]);
 
   const handleStartListening = () => {
-    SpeechRecognition.startListening({ 
-      continuous: true,
-      interimResults: true
-    })
-      .then(() => {
-        toast.success('Listening started');
-      })
-      .catch((error) => {
-        toast.error(`Error starting speech recognition: ${error.message}`);
-      });
+    const success = speechRecognition.start();
+    if (success) {
+      setListening(true);
+      toast.success('Listening started');
+    } else {
+      toast.error('Failed to start speech recognition');
+    }
   };
 
   const handleStopListening = () => {
-    SpeechRecognition.stopListening();
+    speechRecognition.stop();
+    setListening(false);
+    setInterimTranscript('');
     toast.info('Listening stopped');
   };
 
-  if (!browserSupportsSpeechRecognition) {
+  if (!supported) {
     return (
       <Card>
         <CardHeader className="pb-3">
