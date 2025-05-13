@@ -6,66 +6,27 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/sonner';
-import { Clock, Users, BarChart, Mic, MicOff, FileDown } from 'lucide-react';
-import speechRecognition from '@/utils/speechRecognition';
+import { Clock, Users, BarChart, FileDown } from 'lucide-react';
 import TranscriptView from '../shared/TranscriptView';
 import ActivePollsList from './ActivePollsList';
 import PollResultsView from './PollResultsView';
 import SessionInfo from './SessionInfo';
+import ApiKeyConfig from './ApiKeyConfig';
+import SpeechRecognitionController from './SpeechRecognitionController';
 
 const HostDashboard: React.FC = () => {
   const { 
     activeSession, 
     transcriptEntries, 
-    addTranscriptEntry, 
     endSession,
     activePolls,
     pollResults
   } = useAppContext();
   
-  const [isRecording, setIsRecording] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
   const [activeTab, setActiveTab] = useState('transcript');
+  const [isApiConfigured, setIsApiConfigured] = useState(false);
   
-  // Start/stop speech recognition
-  const toggleRecording = () => {
-    if (isRecording) {
-      speechRecognition.stop();
-      setIsRecording(false);
-      toast.info('Recording stopped');
-    } else {
-      const success = speechRecognition.start();
-      if (success) {
-        setIsRecording(true);
-        toast.success('Recording started');
-      } else {
-        toast.error('Could not start recording. Check browser permissions.');
-      }
-    }
-  };
-
-  // Initialize speech recognition
-  useEffect(() => {
-    if (!speechRecognition.isSupported()) {
-      toast.error('Speech recognition is not supported in this browser');
-    }
-    
-    speechRecognition.onTranscript((text) => {
-      addTranscriptEntry({
-        id: `transcript-${Date.now()}`,
-        text,
-        timestamp: new Date()
-      });
-    });
-
-    // Clean up on unmount
-    return () => {
-      if (isRecording) {
-        speechRecognition.stop();
-      }
-    };
-  }, [addTranscriptEntry]);
-
   // Track session time
   useEffect(() => {
     const timer = setInterval(() => {
@@ -83,10 +44,6 @@ const HostDashboard: React.FC = () => {
   };
 
   const handleEndSession = () => {
-    if (isRecording) {
-      speechRecognition.stop();
-      setIsRecording(false);
-    }
     endSession();
     toast.info('Session ended');
   };
@@ -107,6 +64,10 @@ const HostDashboard: React.FC = () => {
     URL.revokeObjectURL(url);
     
     toast.success('Transcript downloaded');
+  };
+
+  const handleApiConfigured = () => {
+    setIsApiConfigured(true);
   };
 
   if (!activeSession) {
@@ -136,15 +97,6 @@ const HostDashboard: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button 
-              variant={isRecording ? "destructive" : "default"}
-              size="sm"
-              className="flex items-center gap-2"
-              onClick={toggleRecording}
-            >
-              {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
-              {isRecording ? 'Stop Recording' : 'Start Recording'}
-            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -166,9 +118,11 @@ const HostDashboard: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Session info card */}
-          <div className="md:col-span-1">
+          {/* Left sidebar */}
+          <div className="md:col-span-1 space-y-6">
             <SessionInfo session={activeSession} />
+            <SpeechRecognitionController />
+            {!isApiConfigured && <ApiKeyConfig onConfigured={handleApiConfigured} />}
           </div>
 
           {/* Main content area */}

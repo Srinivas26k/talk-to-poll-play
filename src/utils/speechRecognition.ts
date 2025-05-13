@@ -1,4 +1,42 @@
 
+// Define the missing TypeScript types for the Web Speech API
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onerror: (event: SpeechRecognitionErrorEvent) => void;
+  onend: () => void;
+}
+
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: {
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+        confidence: number;
+      };
+      isFinal: boolean;
+      length: number;
+    };
+    length: number;
+  };
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+  message: string;
+}
+
+// Add the Web Speech API to the Window interface
+interface Window {
+  SpeechRecognition: new () => SpeechRecognition;
+  webkitSpeechRecognition: new () => SpeechRecognition;
+}
+
 export class SpeechRecognitionService {
   private recognition: SpeechRecognition | null = null;
   private isListening: boolean = false;
@@ -13,8 +51,8 @@ export class SpeechRecognitionService {
   private initializeRecognition() {
     if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
       // Use the browser implementation
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      this.recognition = new SpeechRecognition();
+      const SpeechRecognitionImpl = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      this.recognition = new SpeechRecognitionImpl();
       
       // Configure recognition
       this.recognition.continuous = true;
@@ -101,7 +139,7 @@ export class SpeechRecognitionService {
   }
 
   public isSupported(): boolean {
-    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    return !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition;
   }
 }
 
