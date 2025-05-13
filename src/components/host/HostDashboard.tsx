@@ -145,19 +145,20 @@ const HostDashboard: React.FC = () => {
                       )}
                     </TabsTrigger>
                   </TabsList>
+                
+                  <CardContent className="pt-2">
+                    <TabsContent value="transcript" className="m-0">
+                      <TranscriptView entries={transcriptEntries} />
+                    </TabsContent>
+                    <TabsContent value="polls" className="m-0">
+                      <ActivePollsList />
+                    </TabsContent>
+                    <TabsContent value="results" className="m-0">
+                      <PollResultsView />
+                    </TabsContent>
+                  </CardContent>
                 </Tabs>
               </CardHeader>
-              <CardContent className="pt-2">
-                <TabsContent value="transcript" className="m-0">
-                  <TranscriptView entries={transcriptEntries} />
-                </TabsContent>
-                <TabsContent value="polls" className="m-0">
-                  <ActivePollsList />
-                </TabsContent>
-                <TabsContent value="results" className="m-0">
-                  <PollResultsView />
-                </TabsContent>
-              </CardContent>
             </Card>
           </div>
         </div>
