@@ -1,1 +1,5 @@
+
 project_id = "hcfbtbunlqznieubakyf"
+
+[functions.generate-poll]
+verify_jwt = false

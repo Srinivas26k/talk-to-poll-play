@@ -42,9 +42,13 @@ export class SpeechRecognitionService {
   private recognition: SpeechRecognition | null = null;
   private isListening: boolean = false;
   private onTranscriptCallback: ((text: string) => void) | null = null;
+  private onInterimTranscriptCallback: ((text: string) => void) | null = null;
   private interimTranscript: string = '';
   private finalTranscript: string = '';
-
+  private lastRestartTime: number = 0;
+  private maxRestartFrequency: number = 500; // ms between restarts
+  private restartTimeout: number | null = null;
+  
   constructor() {
     this.initializeRecognition();
   }
@@ -60,7 +64,7 @@ export class SpeechRecognitionService {
         if (SpeechRecognitionImpl) {
           this.recognition = new SpeechRecognitionImpl();
           
-          // Configure recognition
+          // Configure recognition with more robust settings
           this.recognition.continuous = true;
           this.recognition.interimResults = true;
           this.recognition.lang = 'en-US';
@@ -70,6 +74,7 @@ export class SpeechRecognitionService {
           this.recognition.onerror = this.handleRecognitionError.bind(this);
           this.recognition.onend = this.handleRecognitionEnd.bind(this);
           this.recognition.onstart = () => {
+            console.log("Speech recognition started");
             this.isListening = true;
           };
         }
@@ -98,32 +103,62 @@ export class SpeechRecognitionService {
       this.onTranscriptCallback(this.finalTranscript);
       this.finalTranscript = '';
     }
+    
+    // Always send interim transcript updates
+    if (this.onInterimTranscriptCallback) {
+      this.onInterimTranscriptCallback(this.interimTranscript);
+    }
   }
 
   private handleRecognitionError(event: SpeechRecognitionErrorEvent) {
-    console.error('Speech Recognition Error:', event.error);
+    console.error('Speech Recognition Error:', event.error, event.message);
     
-    // Try to restart recognition on some errors
-    if (event.error !== 'no-speech' && this.isListening) {
-      this.stop();
-      setTimeout(() => {
-        if (this.isListening) {
-          this.start();
-        }
-      }, 1000);
+    // Don't restart on these errors
+    if (event.error === 'not-allowed' || event.error === 'audio-capture') {
+      this.isListening = false;
+      return;
+    }
+    
+    // For other errors, try to restart after delay
+    if (this.isListening) {
+      this.scheduleRestart();
     }
   }
 
   private handleRecognitionEnd() {
+    console.log("Speech recognition ended");
     // Auto restart if we're supposed to be listening
     if (this.isListening && this.recognition) {
+      this.scheduleRestart();
+    }
+  }
+  
+  private scheduleRestart() {
+    // Clear any existing restart timeout
+    if (this.restartTimeout !== null) {
+      clearTimeout(this.restartTimeout);
+    }
+    
+    const now = Date.now();
+    const timeSinceLastRestart = now - this.lastRestartTime;
+    
+    // If we've restarted very recently, add some delay to avoid rapid restarts
+    const delay = timeSinceLastRestart < this.maxRestartFrequency 
+      ? this.maxRestartFrequency - timeSinceLastRestart
+      : 100;
+    
+    this.restartTimeout = window.setTimeout(() => {
       try {
-        this.recognition.start();
+        if (this.recognition && this.isListening) {
+          console.log("Restarting speech recognition");
+          this.recognition.start();
+          this.lastRestartTime = Date.now();
+        }
       } catch (error) {
         console.error('Error restarting speech recognition:', error);
         this.isListening = false;
       }
-    }
+    }, delay);
   }
 
   public start() {
@@ -135,6 +170,7 @@ export class SpeechRecognitionService {
     try {
       this.recognition.start();
       this.isListening = true;
+      this.lastRestartTime = Date.now();
       return true;
     } catch (error) {
       console.error('Error starting speech recognition:', error);
@@ -151,6 +187,12 @@ export class SpeechRecognitionService {
     try {
       this.recognition.stop();
       this.isListening = false;
+      
+      // Clear any pending restart
+      if (this.restartTimeout !== null) {
+        clearTimeout(this.restartTimeout);
+        this.restartTimeout = null;
+      }
     } catch (error) {
       console.error('Error stopping speech recognition:', error);
     }
@@ -158,6 +200,10 @@ export class SpeechRecognitionService {
 
   public onTranscript(callback: (text: string) => void) {
     this.onTranscriptCallback = callback;
+  }
+  
+  public onInterimTranscript(callback: (text: string) => void) {
+    this.onInterimTranscriptCallback = callback;
   }
 
   public isSupported(): boolean {
@@ -167,6 +213,10 @@ export class SpeechRecognitionService {
 
   public getInterimTranscript(): string {
     return this.interimTranscript;
+  }
+  
+  public isActive(): boolean {
+    return this.isListening;
   }
 }
 

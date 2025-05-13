@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from '@/components/ui/sonner';
+import { toast } from '@/components/ui/use-toast';
 import { Mic, MicOff, Volume } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
 import speechRecognition from '@/utils/speechRecognition';
@@ -21,6 +21,7 @@ const SpeechRecognitionController: React.FC = () => {
     
     // Set up transcript handler
     speechRecognition.onTranscript((text) => {
+      console.log("Final transcript received:", text);
       addTranscriptEntry({
         id: `transcript-${Date.now()}`,
         text: text,
@@ -28,8 +29,19 @@ const SpeechRecognitionController: React.FC = () => {
       });
     });
     
+    // Set up interim transcript handler
+    speechRecognition.onInterimTranscript((text) => {
+      setInterimTranscript(text);
+    });
+    
+    // Check status every 2 seconds to ensure UI stays in sync
+    const statusInterval = setInterval(() => {
+      setListening(speechRecognition.isActive());
+    }, 2000);
+    
     return () => {
       // Cleanup
+      clearInterval(statusInterval);
       if (listening) {
         speechRecognition.stop();
       }
@@ -40,9 +52,16 @@ const SpeechRecognitionController: React.FC = () => {
     const success = speechRecognition.start();
     if (success) {
       setListening(true);
-      toast.success('Listening started');
+      toast({
+        title: "Listening started",
+        description: "Speech recognition is now active"
+      });
     } else {
-      toast.error('Failed to start speech recognition');
+      toast({
+        title: "Failed to start speech recognition",
+        description: "Please check your microphone permissions",
+        variant: "destructive"
+      });
     }
   };
 
@@ -50,7 +69,10 @@ const SpeechRecognitionController: React.FC = () => {
     speechRecognition.stop();
     setListening(false);
     setInterimTranscript('');
-    toast.info('Listening stopped');
+    toast({
+      title: "Listening stopped",
+      description: "Speech recognition has been paused"
+    });
   };
 
   if (!supported) {

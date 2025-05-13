@@ -3,9 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { toast } from '@/components/ui/sonner';
+import { toast } from '@/components/ui/use-toast';
 import { Clock, Users, BarChart, FileDown } from 'lucide-react';
 import TranscriptView from '../shared/TranscriptView';
 import ActivePollsList from './ActivePollsList';
@@ -20,7 +20,8 @@ const HostDashboard: React.FC = () => {
     transcriptEntries, 
     endSession,
     activePolls,
-    pollResults
+    pollResults,
+    participants
   } = useAppContext();
   
   const [sessionTime, setSessionTime] = useState(0);
@@ -43,9 +44,14 @@ const HostDashboard: React.FC = () => {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const handleEndSession = () => {
-    endSession();
-    toast.info('Session ended');
+  const handleEndSession = async () => {
+    const success = await endSession();
+    if (success) {
+      toast({
+        title: "Session Ended",
+        description: "The session has been ended successfully"
+      });
+    }
   };
 
   const downloadTranscript = () => {
@@ -63,7 +69,10 @@ const HostDashboard: React.FC = () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    toast.success('Transcript downloaded');
+    toast({
+      title: "Transcript Downloaded",
+      description: "Transcript has been saved to your device"
+    });
   };
 
   const handleApiConfigured = () => {
@@ -88,7 +97,7 @@ const HostDashboard: React.FC = () => {
               </Badge>
               <Badge variant="outline" className="flex items-center gap-1">
                 <Users size={14} />
-                0 participants
+                {participants.length} participants
               </Badge>
               <Badge variant="outline" className="flex items-center gap-1">
                 <BarChart size={14} />
