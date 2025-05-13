@@ -1,14 +1,24 @@
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, LogOut } from 'lucide-react';
 import TranscriptView from '../shared/TranscriptView';
 import PollWidget from './PollWidget';
 
 const ParticipantView: React.FC = () => {
-  const { activeSession, transcriptEntries, activePolls } = useAppContext();
+  const navigate = useNavigate();
+  const { activeSession, transcriptEntries, activePolls, leaveSession } = useAppContext();
+
+  const handleLeaveSession = async () => {
+    const success = await leaveSession();
+    if (success) {
+      navigate('/');
+    }
+  };
 
   if (!activeSession) {
     return <div>No active session</div>;
@@ -18,11 +28,21 @@ const ParticipantView: React.FC = () => {
     <div className="container mx-auto px-4 py-6">
       <div className="flex flex-col gap-6">
         {/* Session header */}
-        <div>
-          <h1 className="text-2xl font-bold">{activeSession.title}</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <Badge variant="secondary">{activeSession.accessCode}</Badge>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">{activeSession.title}</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="secondary">{activeSession.accessCode}</Badge>
+            </div>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLeaveSession}
+          >
+            <LogOut size={16} className="mr-1" />
+            Leave Session
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

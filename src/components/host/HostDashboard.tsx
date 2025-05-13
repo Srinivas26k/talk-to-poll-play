@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/use-toast';
-import { Clock, Users, BarChart, FileDown } from 'lucide-react';
+import { Clock, Users, BarChart, FileDown, LogOut } from 'lucide-react';
 import TranscriptView from '../shared/TranscriptView';
 import ActivePollsList from './ActivePollsList';
 import PollResultsView from './PollResultsView';
@@ -15,10 +16,12 @@ import ApiKeyConfig from './ApiKeyConfig';
 import SpeechRecognitionController from './SpeechRecognitionController';
 
 const HostDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { 
     activeSession, 
     transcriptEntries, 
     endSession,
+    leaveSession,
     activePolls,
     pollResults,
     participants
@@ -51,6 +54,13 @@ const HostDashboard: React.FC = () => {
         title: "Session Ended",
         description: "The session has been ended successfully"
       });
+    }
+  };
+
+  const handleLeaveSession = async () => {
+    const success = await leaveSession();
+    if (success) {
+      navigate('/');
     }
   };
 
@@ -122,6 +132,14 @@ const HostDashboard: React.FC = () => {
               onClick={handleEndSession}
             >
               End Session
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLeaveSession}
+            >
+              <LogOut size={16} className="mr-1" />
+              Leave Session
             </Button>
           </div>
         </div>

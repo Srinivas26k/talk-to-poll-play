@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Session, User, TranscriptEntry, PollQuestion, PollResponse, PollResult } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,10 +20,13 @@ interface AppContextType {
   joinSession: (accessCode: string, userName: string) => Promise<boolean>;
   createSession: (title: string, settings: Session['settings']) => Promise<boolean>;
   endSession: () => Promise<boolean>;
+  leaveSession: () => Promise<boolean>;
   participants: User[];
   generatePoll: () => Promise<boolean>;
   saveApiKey: (apiKey: string) => void;
   openAiApiKey: string | null;
+  isMuted: boolean;
+  toggleMute: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -38,6 +42,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [openAiApiKey, setOpenAiApiKey] = useState<string | null>(
     localStorage.getItem('openrouter_api_key')
   );
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+
+  // Toggle mute state function
+  const toggleMute = () => {
+    setIsMuted(prevState => !prevState);
+  };
 
   // Setup real-time listeners when session is active
   useEffect(() => {
@@ -56,7 +66,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         },
         (payload) => {
           const newTranscript: TranscriptEntry = {
-            id: payload.new.id,
+            id: payload.new.id as string,
             text: payload.new.text as string,
             timestamp: new Date(payload.new.created_at as string)
           };
@@ -78,14 +88,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           filter: `session_id=eq.${activeSession.id}`
         },
         (payload) => {
-          const options = Array.isArray(payload.new.options) 
-            ? payload.new.options 
-            : JSON.parse(payload.new.options as string);
+          let options: string[];
+          
+          if (Array.isArray(payload.new.options)) {
+            options = payload.new.options as string[];
+          } else if (typeof payload.new.options === 'string') {
+            try {
+              options = JSON.parse(payload.new.options);
+            } catch (e) {
+              options = ["Option 1", "Option 2"];
+              console.error("Failed to parse poll options:", e);
+            }
+          } else {
+            // If it's an object, try to convert it
+            try {
+              options = Object.values(payload.new.options as Record<string, string>);
+            } catch (e) {
+              options = ["Option 1", "Option 2"];
+              console.error("Failed to convert poll options:", e);
+            }
+          }
           
           const newPoll: PollQuestion = {
-            id: payload.new.id,
+            id: payload.new.id as string,
             question: payload.new.question as string,
-            options: options as string[],
+            options: options,
             generatedFrom: '',
             createdAt: new Date(payload.new.created_at as string)
           };
@@ -131,9 +158,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           table: 'poll_answers'
         },
         (payload) => {
-          const pollId = payload.new.poll_id;
-          const participantId = payload.new.participant_id;
-          const answer = payload.new.answer;
+          const pollId = payload.new.poll_id as string;
+          const participantId = payload.new.participant_id as string;
+          const answer = payload.new.answer as string;
           
           // Find the poll
           const poll = activePolls.find(p => p.id === pollId);
@@ -148,7 +175,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             questionId: pollId,
             participantId: participantId,
             selectedOption: optionIndex,
-            timestamp: new Date(payload.new.created_at)
+            timestamp: new Date(payload.new.created_at as string)
           };
           
           setPollResponses(prev => [...prev, newResponse]);
@@ -194,7 +221,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const entries: TranscriptEntry[] = data.map(item => ({
       id: item.id,
       text: item.text,
-      timestamp: new Date(item.created_at)
+      timestamp: new Date(item.created_at as string)
     }));
     
     setTranscriptEntries(entries);
@@ -215,16 +242,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     
     const polls: PollQuestion[] = data.map(item => {
-      const options = Array.isArray(item.options) 
-        ? item.options 
-        : JSON.parse(item.options);
+      let options: string[];
+      
+      if (Array.isArray(item.options)) {
+        options = item.options as string[];
+      } else if (typeof item.options === 'string') {
+        try {
+          options = JSON.parse(item.options);
+        } catch (e) {
+          options = ["Option 1", "Option 2"];
+          console.error("Failed to parse poll options:", e);
+        }
+      } else {
+        // If it's an object, try to convert it
+        try {
+          options = Object.values(item.options as Record<string, string>);
+        } catch (e) {
+          options = ["Option 1", "Option 2"];
+          console.error("Failed to convert poll options:", e);
+        }
+      }
         
       return {
         id: item.id,
         question: item.question,
         options: options,
         generatedFrom: '',
-        createdAt: new Date(item.created_at)
+        createdAt: new Date(item.created_at as string)
       };
     });
     
@@ -280,7 +324,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         questionId: item.poll_id,
         participantId: item.participant_id,
         selectedOption: optionIndex,
-        timestamp: new Date(item.created_at)
+        timestamp: new Date(item.created_at as string)
       });
     }
     
@@ -342,7 +386,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           poll_id: response.questionId,
           participant_id: response.participantId,
           answer: poll.options[response.selectedOption],
-          created_at: response.timestamp.toISOString()
+          created_at: response.timestamp.toISOString(),
+          session_id: activeSession.id
         }]);
         
       if (error) {
@@ -410,7 +455,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       
       // Create participant
-      const participantId = `participant-${Date.now()}`;
+      const participantId = crypto.randomUUID();
       const { data: participantData, error: participantError } = await supabase
         .from('participants')
         .insert([{
@@ -450,7 +495,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           participantNames: true,
           autoPublishResults: false
         },
-        createdAt: new Date(sessionData.created_at)
+        createdAt: new Date(sessionData.created_at as string)
       });
       
       toast({
@@ -474,7 +519,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       // Generate a random 6-digit access code
       const accessCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const hostId = `host-${Date.now()}`;
+      const hostId = crypto.randomUUID();
       
       // Create session in Supabase
       const { data: sessionData, error: sessionError } = await supabase
@@ -513,8 +558,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         accessCode,
         status: 'active',
         settings,
-        createdAt: new Date(sessionData.created_at)
+        createdAt: new Date(sessionData.created_at as string)
       });
+      
+      // Automatically schedule the first poll if API key is available
+      if (openAiApiKey) {
+        setTimeout(() => {
+          generatePoll().catch(console.error);
+        }, 60000 * settings.pollFrequency);
+      }
       
       toast({
         title: "Session created",
@@ -576,6 +628,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return false;
   };
   
+  const leaveSession = async () => {
+    if (!activeSession || !currentUser) return false;
+    
+    try {
+      // If participant, remove from participants list
+      if (currentUser.role === 'participant') {
+        const { error } = await supabase
+          .from('participants')
+          .delete()
+          .eq('id', currentUser.id);
+          
+        if (error) {
+          console.error('Error leaving session:', error);
+          toast({
+            title: "Failed to leave session",
+            description: "An error occurred while leaving the session",
+            variant: "destructive"
+          });
+          return false;
+        }
+      }
+      
+      // Reset state
+      setActiveSession(null);
+      setCurrentUser(null);
+      setTranscriptEntries([]);
+      setActivePolls([]);
+      setPollResponses([]);
+      setPollResults({});
+      setParticipants([]);
+      
+      toast({
+        title: "Session left",
+        description: "You have left the session successfully"
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Error leaving session:', error);
+      toast({
+        title: "Failed to leave session",
+        description: "An error occurred while leaving the session",
+        variant: "destructive"
+      });
+      return false;
+    }
+  };
+  
   const generatePoll = async () => {
     if (!activeSession || !openAiApiKey) {
       toast({
@@ -591,7 +691,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + (supabase.auth.getSession && (await supabase.auth.getSession())?.data?.session?.access_token || '')
+          'Authorization': 'Bearer ' + (await supabase.auth.getSession())?.data?.session?.access_token || ''
         },
         body: JSON.stringify({
           session_id: activeSession.id,
@@ -618,7 +718,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         description: "A new poll has been created"
       });
       
-      // Poll should be added through the real-time subscription
+      // Schedule next poll
+      if (activeSession.status === 'active') {
+        setTimeout(() => {
+          generatePoll().catch(console.error);
+        }, 60000 * activeSession.settings.pollFrequency);
+      }
       
       return true;
     } catch (error) {
@@ -662,10 +767,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         joinSession,
         createSession,
         endSession,
+        leaveSession,
         participants,
         generatePoll,
         saveApiKey,
-        openAiApiKey
+        openAiApiKey,
+        isMuted,
+        toggleMute
       }}
     >
       {children}
