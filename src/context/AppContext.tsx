@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Session, User, TranscriptEntry, PollQuestion, PollResponse, PollResult } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
@@ -58,8 +57,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         (payload) => {
           const newTranscript: TranscriptEntry = {
             id: payload.new.id,
-            text: payload.new.text,
-            timestamp: new Date(payload.new.created_at)
+            text: payload.new.text as string,
+            timestamp: new Date(payload.new.created_at as string)
           };
           
           setTranscriptEntries(prev => [...prev, newTranscript]);
@@ -81,14 +80,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         (payload) => {
           const options = Array.isArray(payload.new.options) 
             ? payload.new.options 
-            : JSON.parse(payload.new.options);
+            : JSON.parse(payload.new.options as string);
           
           const newPoll: PollQuestion = {
             id: payload.new.id,
-            question: payload.new.question,
-            options: options,
+            question: payload.new.question as string,
+            options: options as string[],
             generatedFrom: '',
-            createdAt: new Date(payload.new.created_at)
+            createdAt: new Date(payload.new.created_at as string)
           };
           
           setActivePolls(prev => [...prev, newPoll]);
@@ -592,7 +591,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabase.auth.session()?.access_token || ''}`
+          'Authorization': 'Bearer ' + (supabase.auth.getSession && (await supabase.auth.getSession())?.data?.session?.access_token || '')
         },
         body: JSON.stringify({
           session_id: activeSession.id,
